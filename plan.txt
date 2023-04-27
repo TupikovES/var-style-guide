@@ -1,0 +1,256 @@
+Принципы
+1. Чтение кода важнее чем его написание
+
+Когда пишем код нужно думать о том, как его будут понимать другие.
+Так как при написании кода мы обычно держим контекст в голове,
+а во время чтения постоянно переключаем его.
+Погоня за краткостью может сказаться на понимании этого кода.
+Главная проблема написать такой краткий код, 
+чтобы он остался максимально понятным читателю.
+
+2. Код должен быть понятен с точки зрения локального контекста
+
+В месте объявления var мы должны быть в состоянии сразу понять 
+что здесь происходит. В идеале код должен быть понятен в рамках фрагмента кода.
+И если для понимания var нам нужно изучить несколько мест в коде,
+то возможно не стоит использовать var либо у вас проблемы с кодом.
+
+3. Читаемость кода не должна зависеть от IDEs
+
+4. Явные типы - это компромис
+
+Явное указание типов может быть сильно избыточным, 
+и вытеснить полезную информацию.
+Но опуская их мы не должны потерять ясность в коде, для этого можно использовать
+имена переменных, методов и другие инструменты.
+
+Руководство
+
+1. Используйте имена переменных содержащих полезную информацию
+
+// ORIGINAL
+List<Customer> customers = dbconn.executeQuery(query);
+
+// GOOD - Вингерская нотация
+var customerList = dbconn.executeQuery(query);
+
+иногда лучше что бы имя переменной выражало роль или характер переменной
+
+// ORIGINAL
+try (Stream<Customer> result = dbconn.executeQuery(query)) {
+    return result.map(...)
+                 .filter(...)
+                 .findAny();
+}
+
+// GOOD
+try (var customers = dbconn.executeQuery(query)) {
+    return customers.map(...)
+                    .filter(...)
+                    .findAny();
+}
+
+2. Сводите к минимуму область действия локальных переменных
+
+var items = new ArrayList<Item>(...);
+items.add(MUST_BE_PROCESSED_LAST);
+for (var item : items) ...
+
+Добавляем элемент в конец списка. И обрабатываем оюидая в конце нужный объект. 
+Потом нам потребовалось удалить дубли:
+
+var items = new HashSet<Item>(...);
+items.add(MUST_BE_PROCESSED_LAST);
+for (var item : items) ...
+
+Увидим и поправим. Но что если область видимости растянулась на большее количество строк?
+
+var items = new HashSet<Item>(...);
+
+// ... 100 lines of code ...
+
+items.add(MUST_BE_PROCESSED_LAST);
+for (var item : items) ...
+
+При я вном определении типа нам бы потребовалось поменять тип по всему коду с List на Set но не в случае с var и порадим баг.
+
+3. Учитываем значение инициализатора
+
+// ORIGINAL
+ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+
+// GOOD
+var outputStream = new ByteArrayOutputStream();
+
+Еще разумные примеры
+статический фабричный инициализатор содержит имя типа
+
+// ORIGINAL
+BufferedReader reader = Files.newBufferedReader(...);
+List<String> stringList = List.of("a", "b", "c");
+
+// GOOD
+var reader = Files.newBufferedReader(...);
+var stringList = List.of("a", "b", "c");
+
+
+4. Var для разбиения стримов или вложенных выражений
+
+return strings.stream()
+              .collect(groupingBy(s -> s, counting()))
+              .entrySet()
+              .stream()
+              .max(Map.Entry.comparingByValue())
+              .map(Map.Entry::getKey);
+
+Почему не разбили?
+Вот что получится:
+
+Map<String, Long> freqMap = strings.stream()
+                                   .collect(groupingBy(s -> s, counting()));
+Optional<Map.Entry<String, Long>> maxEntryOpt = freqMap.entrySet()
+                                                       .stream()
+                                                       .max(Map.Entry.comparingByValue());
+return maxEntryOpt.map(Map.Entry::getKey);
+
+из за явного определения типов не очень читаемый код.
+
+теперь с var
+
+var freqMap = strings.stream()
+                     .collect(groupingBy(s -> s, counting()));
+var maxEntryOpt = freqMap.entrySet()
+                         .stream()
+                         .max(Map.Entry.comparingByValue());
+return maxEntryOpt.map(Map.Entry::getKey);
+
+тут можно поспорить но суть понятна)
+
+5. Програмирование на уровне интерфейсов
+
+// ORIGINAL
+List<String> list = new ArrayList<>();
+
+// Inferred type of list is ArrayList<String>
+var list = new ArrayList<String>();
+
+6. Осторожно использовать с "diamond" и Generic методами
+
+PriorityQueue<Item> itemQueue = new PriorityQueue<Item>();
+
+аналогичен
+
+// OK: both declare variables of type PriorityQueue<Item>
+PriorityQueue<Item> itemQueue = new PriorityQueue<>();
+var itemQueue = new PriorityQueue<Item>();
+
+не равен:
+
+// DANGEROUS: infers as PriorityQueue<Object>
+var itemQueue = new PriorityQueue<>();
+
+// DANGEROUS: infers as List<Object>
+var list = List.of();
+
+Передаваемый тип в конструкторе может дать информацию о типе
+
+// OK: itemQueue infers as PriorityQueue<String>
+Comparator<String> comp = ... ;
+var itemQueue = new PriorityQueue<>(comp);
+
+// OK: infers as List<BigInteger>
+var list = List.of(BigInteger.ZERO);
+
+7. Осторожно использовать с литералами
+
+Мало полезно но иногда можно для красоты
+
+// ORIGINAL
+boolean ready = true;
+char ch = '\ufffd';
+long sum = 0L;
+String label = "wombat";
+
+// GOOD
+var ready = true;
+var ch    = '\ufffd';
+var sum   = 0L;
+var label = "wombat";
+
+На примере целых чисел:
+
+// ORIGINAL
+byte flags = 0;
+short mask = 0x7fff;
+long base = 17;
+
+// DANGEROUS: all infer as int
+var flags = 0;
+var mask = 0x7fff;
+var base = 17;
+
+С плавующей запятой лучше:
+
+// ORIGINAL
+float f = 1.0f;
+double d = 2.0;
+
+// GOOD
+var f = 1.0f;
+var d = 2.0;
+
+Но есть нюанс если мы нарушим правило 3:
+
+// ORIGINAL
+static final float INITIAL = 3.0f;
+...
+double temp = INITIAL;
+
+// DANGEROUS: now infers as float
+var temp = INITIAL;
+
+Примеры:
+
+
+Удаление из мапы max совпадений
+// ORIGINAL
+void removeMatches(Map<? extends String, ? extends Number> map, int max) {
+    for (Iterator<? extends Map.Entry<? extends String, ? extends Number>> iterator =
+             map.entrySet().iterator(); iterator.hasNext();) {
+        Map.Entry<? extends String, ? extends Number> entry = iterator.next();
+        if (max > 0 && matches(entry)) {
+            iterator.remove();
+            max--;
+        }
+    }
+}
+
+применим var
+
+// GOOD
+void removeMatches(Map<? extends String, ? extends Number> map, int max) {
+    for (var iterator = map.entrySet().iterator(); iterator.hasNext();) {
+        var entry = iterator.next();
+        if (max > 0 && matches(entry)) {
+            iterator.remove();
+            max--;
+        }
+    }
+}
+
+
+Try-with-resouces:
+
+// ORIGINAL
+try (InputStream is = socket.getInputStream();
+     InputStreamReader isr = new InputStreamReader(is, charsetName);
+     BufferedReader buf = new BufferedReader(isr)) {
+    return buf.readLine();
+}
+
+// GOOD
+try (var inputStream = socket.getInputStream();
+     var reader = new InputStreamReader(inputStream, charsetName);
+     var bufReader = new BufferedReader(reader)) {
+    return bufReader.readLine();
+}
